@@ -1,0 +1,21 @@
+export const adminLogout = async (req, res) => {
+  try {
+    return res
+      .status(200)
+      .clearCookie("admin_token", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+      })
+      .json({
+        success: true,
+        message: "Logged out successfully",
+      });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
