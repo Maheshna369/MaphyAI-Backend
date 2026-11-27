@@ -247,6 +247,14 @@ export const userRequest = async (req, res) => {
 export const fetchUserRequest = async (req, res) => {
   try {
     const user = await checkUserAuthentication(req, res);
+    if (res.headersSent) return;
+
+    if (!user?.userId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+        success: false,
+      });
+    }
     const userRequests = await requestModel
       .findOne({ userId: user.userId })
       ?.lean();
@@ -261,7 +269,10 @@ export const fetchUserRequest = async (req, res) => {
       userRequests,
     });
   } catch (error) {
-    console.error("Error while fetching user requests: ", error);
+    console.error("Error while fetching user requests:", error);
+
+    if (res.headersSent) return;
+
     return res.status(500).json({
       message: "Something went wrong while processing your request.",
       success: false,

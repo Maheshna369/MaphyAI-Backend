@@ -12,7 +12,10 @@ const checkUserAuthentication = async (req, res) => {
   const payload = jwt.verify(token, jwtSecret);
   const userId = payload?.userId;
   if (!userId) {
-    res.status(200).json({ message: "Invalid user token !", success: false });
+    return res.status(401).json({
+      message: "Invalid user token!",
+      success: false,
+    });
   }
   const user = await userModel.findOne({ userId }).lean();
   if (!user) {

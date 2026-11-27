@@ -3,7 +3,8 @@ import checkUserAuthentication from "../../utils/auth/user.auth.js";
 
 export const testAI = async (req, res) => {
   try {
-    const { prompt, prevMessages = [] } = req?.body;
+    // 1. Validate prompt
+    const { prompt, prevMessages = [] } = req.body ?? {};
 
     if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
       return res.status(400).json({
@@ -12,45 +13,59 @@ export const testAI = async (req, res) => {
       });
     }
 
-    res.statusCode = 200;
+    // 2. Authenticate BEFORE streaming
+    const user = await checkUserAuthentication(req, res);
 
+    // The authentication helper may have sent a response.
+    if (res.headersSent || res.writableEnded) {
+      return;
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+        success: false,
+      });
+    }
+
+    // 3. Configure streaming headers
+    res.status(200);
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("Transfer-Encoding", "chunked");
 
     if (typeof res.flushHeaders === "function") {
       res.flushHeaders();
     }
-    const user = await checkUserAuthentication(req, res);
+
+    // 4. Generate AI response
     const stream = generateText({
       prompt: prompt.trim(),
       prevMessages: Array.isArray(prevMessages) ? prevMessages : [],
       user,
     });
 
+    // 5. Stream the response
     for await (const chunk of stream) {
-      if (res.writableEnded) {
+      if (res.destroyed || res.writableEnded) {
         break;
       }
 
       res.write(chunk);
     }
 
-    if (!res.writableEnded) {
+    // 6. Finish response
+    if (!res.writableEnded && !res.destroyed) {
       res.end();
     }
   } catch (error) {
     console.error("Error in testAI controller:", error);
 
-    /*
-     * Once streaming has started, headers/status cannot be changed.
-     */
+    // Never send JSON after streaming has started.
     if (res.headersSent) {
-      if (!res.writableEnded) {
+      if (!res.writableEnded && !res.destroyed) {
         res.end();
       }
-
       return;
     }
 
